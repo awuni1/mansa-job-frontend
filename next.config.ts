@@ -4,6 +4,9 @@ const nextConfig: NextConfig = {
   // Enable React Strict Mode for better development experience
   reactStrictMode: true,
 
+  // Turbopack configuration (Next.js 16+)
+  turbopack: {},
+
   // Image optimization configuration
   images: {
     remotePatterns: [
@@ -64,20 +67,6 @@ const nextConfig: NextConfig = {
         permanent: false,
       },
     ];
-  },
-
-  // Webpack configuration
-  webpack: (config, { isServer }) => {
-    // Fix for certain packages that need to be transpiled
-    if (!isServer) {
-      config.resolve.fallback = {
-        ...config.resolve.fallback,
-        fs: false,
-        net: false,
-        tls: false,
-      };
-    }
-    return config;
   },
 
   // Enable experimental features

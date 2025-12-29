@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, useCallback, HTMLAttributes } from 'react'
+import { useRef, useState, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { MapPin, Briefcase, Clock, Bookmark, Share2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -21,11 +21,12 @@ interface Job {
     skills?: string[]
 }
 
-interface JobCard3DProps extends HTMLAttributes<HTMLDivElement> {
+interface JobCard3DProps {
     job: Job
     onSave?: (jobId: number | string) => void
     onShare?: (jobId: number | string) => void
     isSaved?: boolean
+    className?: string
 }
 
 export function JobCard3D({
@@ -34,7 +35,6 @@ export function JobCard3D({
     onShare,
     isSaved = false,
     className,
-    ...props
 }: JobCard3DProps) {
     const cardRef = useRef<HTMLDivElement>(null)
     const [rotateX, setRotateX] = useState(0)
@@ -95,7 +95,6 @@ export function JobCard3D({
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             whileTap={{ scale: 0.98 }}
-            {...props}
         >
             <Link href={`/jobs/${job.id}`}>
                 <motion.div
