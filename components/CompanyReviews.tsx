@@ -154,10 +154,10 @@ export function CompanyReviews({
     }
 
     const filteredReviews = reviews
-        .filter(r => filterRating === null || Math.round(r.rating) === filterRating)
+        .filter(r => filterRating === null || Math.round(r.overall_rating) === filterRating)
         .sort((a, b) => {
-            if (sortBy === 'helpful') return b.helpful - a.helpful
-            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+            if (sortBy === 'helpful') return b.helpful_count - a.helpful_count
+            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         })
 
     return (
