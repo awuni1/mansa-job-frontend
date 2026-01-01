@@ -1,45 +1,16 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { CheckCircle, Shield, Award, Star } from 'lucide-react'
+import { CheckCircle, Shield, Award, Star, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface VerifiedBadgeProps {
-    type: 'employer' | 'candidate' | 'premium' | 'top_rated'
+    isVerified: boolean
+    verificationRequested?: boolean
+    type?: 'company' | 'user'
     size?: 'sm' | 'md' | 'lg'
     showLabel?: boolean
     className?: string
-}
-
-const badgeConfig = {
-    employer: {
-        icon: CheckCircle,
-        label: 'Verified Employer',
-        color: 'text-blue-500',
-        bgColor: 'bg-blue-500/10',
-        borderColor: 'border-blue-500/30'
-    },
-    candidate: {
-        icon: Shield,
-        label: 'Verified Profile',
-        color: 'text-accent',
-        bgColor: 'bg-accent/10',
-        borderColor: 'border-accent/30'
-    },
-    premium: {
-        icon: Award,
-        label: 'Premium',
-        color: 'text-secondary',
-        bgColor: 'bg-secondary/10',
-        borderColor: 'border-secondary/30'
-    },
-    top_rated: {
-        icon: Star,
-        label: 'Top Rated',
-        color: 'text-yellow-500',
-        bgColor: 'bg-yellow-500/10',
-        borderColor: 'border-yellow-500/30'
-    }
 }
 
 const sizeConfig = {
@@ -49,13 +20,33 @@ const sizeConfig = {
 }
 
 export function VerifiedBadge({
-    type,
+    isVerified,
+    verificationRequested = false,
+    type = 'company',
     size = 'md',
     showLabel = true,
     className
 }: VerifiedBadgeProps) {
-    const config = badgeConfig[type]
     const sizeStyles = sizeConfig[size]
+
+    if (!isVerified && !verificationRequested) {
+        return null
+    }
+
+    const config = isVerified ? {
+        icon: CheckCircle,
+        label: type === 'company' ? 'Verified Company' : 'Verified Profile',
+        color: 'text-blue-500',
+        bgColor: 'bg-blue-500/10',
+        borderColor: 'border-blue-500/30'
+    } : {
+        icon: AlertCircle,
+        label: 'Verification Pending',
+        color: 'text-yellow-500',
+        bgColor: 'bg-yellow-500/10',
+        borderColor: 'border-yellow-500/30'
+    }
+
     const Icon = config.icon
 
     return (
@@ -71,8 +62,9 @@ export function VerifiedBadge({
                 sizeStyles.text,
                 className
             )}
+            title={config.label}
         >
-            <Icon className={cn(sizeStyles.icon, type === 'top_rated' && 'fill-current')} />
+            <Icon className={sizeStyles.icon} />
             {showLabel && <span>{config.label}</span>}
         </motion.span>
     )

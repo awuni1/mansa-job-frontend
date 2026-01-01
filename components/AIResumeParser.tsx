@@ -82,25 +82,43 @@ export function AIResumeParser({ onParsed, className }: AIResumeParserProps) {
             // Read file content
             const text = await file.text()
 
-            // Call AI API
-            const response = await fetch('/api/ai', {
+            // Get auth token
+            const token = localStorage.getItem('auth_token')
+            if (!token) {
+                setError('Please log in to use AI features')
+                setParsing(false)
+                return
+            }
+
+            // Call new backend AI API
+            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'
+            const response = await fetch(`${API_URL}/ai/parse-resume/`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify({
-                    action: 'parseResume',
-                    data: { resumeText: text }
+                    resume_text: text
                 })
             })
 
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`)
+            }
+
             const result = await response.json()
 
-            if (result.success) {
+            if (result.data) {
                 setParsedData(result.data)
                 onParsed?.(result.data)
+            } else if (result.error) {
+                setError(result.error)
             } else {
-                setError(result.error || 'Failed to parse resume')
+                setError('Failed to parse resume')
             }
         } catch (err) {
+            console.error('Resume parsing error:', err)
             setError('Failed to parse resume. Please try again.')
         } finally {
             setParsing(false)

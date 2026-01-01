@@ -1,78 +1,118 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import {
     Star, ThumbsUp, ThumbsDown, MessageSquare, Building2,
-    Briefcase, TrendingUp, Users, Heart, AlertCircle
+    Briefcase, TrendingUp, Users, Heart, AlertCircle, Loader2
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { GlassCard, GradientCard } from '@/components/ui/GlassCard'
 import { cn } from '@/lib/utils'
 
 interface Review {
-    id: string
-    rating: number
+    id: number
+    overall_rating: number
     title: string
     pros: string
     cons: string
-    role: string
-    isCurrentEmployee: boolean
-    employmentStatus: 'Full-time' | 'Part-time' | 'Contract' | 'Intern'
-    createdAt: string
-    helpful: number
-    notHelpful: number
-    categories: {
-        workLifeBalance: number
-        compensation: number
-        management: number
-        culture: number
-        careerGrowth: number
-    }
+    job_title: string
+    employment_status: string
+    created_at: string
+    helpful_count: number
+    is_helpful: boolean
+    work_life_balance: number
+    salary_benefits: number
+    job_security: number
+    management: number
+    culture: number
+    reviewer_name: string
+    is_anonymous: boolean
 }
 
 interface CompanyReviewsProps {
-    companyName: string
-    reviews: Review[]
-    averageRating: number
-    totalReviews: number
-    recommendPercentage: number
-    categoryAverages: Review['categories']
-    onSubmitReview?: (review: Partial<Review>) => void
-    onHelpful?: (reviewId: string, isHelpful: boolean) => void
+    companySlug: string
     className?: string
 }
 
 const categoryLabels = {
-    workLifeBalance: 'Work-Life Balance',
-    compensation: 'Compensation & Benefits',
+    work_life_balance: 'Work-Life Balance',
+    salary_benefits: 'Compensation & Benefits',
     management: 'Management',
     culture: 'Company Culture',
-    careerGrowth: 'Career Growth'
+    job_security: 'Job Security'
 }
 
 const categoryIcons = {
-    workLifeBalance: Heart,
-    compensation: TrendingUp,
+    work_life_balance: Heart,
+    salary_benefits: TrendingUp,
     management: Users,
     culture: Building2,
-    careerGrowth: Briefcase
+    job_security: Briefcase
 }
 
 export function CompanyReviews({
-    companyName,
-    reviews,
-    averageRating,
-    totalReviews,
-    recommendPercentage,
-    categoryAverages,
-    onSubmitReview,
-    onHelpful,
+    companySlug,
     className
 }: CompanyReviewsProps) {
+    const [reviews, setReviews] = useState<Review[]>([])
+    const [loading, setLoading] = useState(true)
     const [showForm, setShowForm] = useState(false)
     const [sortBy, setSortBy] = useState<'recent' | 'helpful'>('recent')
     const [filterRating, setFilterRating] = useState<number | null>(null)
+
+    useEffect(() => {
+        fetchReviews()
+    }, [companySlug, sortBy, filterRating])
+
+    const fetchReviews = async () => {
+        try {
+            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'
+            const token = localStorage.getItem('auth_token')
+            
+            let url = `${API_URL}/companies/${companySlug}/reviews/?sort=${sortBy === 'helpful' ? 'helpful' : '-created_at'}`
+            if (filterRating) {
+                url += `&rating=${filterRating}`
+            }
+
+            const response = await fetch(url, {
+                headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+            })
+
+            if (response.ok) {
+                const data = await response.json()
+                setReviews(data)
+            }
+        } catch (error) {
+            console.error('Failed to fetch reviews:', error)
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const handleMarkHelpful = async (reviewId: number) => {
+        const token = localStorage.getItem('auth_token')
+        if (!token) {
+            alert('Please log in to mark reviews as helpful')
+            return
+        }
+
+        try {
+            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'
+            const response = await fetch(`${API_URL}/companies/reviews/${reviewId}/helpful/`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            })
+
+            if (response.ok) {
+                fetchReviews() // Refresh reviews
+            }
+        } catch (error) {
+            console.error('Failed to mark review as helpful:', error)
+        }
+    }
 
     const renderStars = (rating: number, interactive = false, onRating?: (r: number) => void) => {
         return (
@@ -94,6 +134,14 @@ export function CompanyReviews({
                         )} />
                     </button>
                 ))}
+            </div>
+        )
+    }
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center p-8">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
             </div>
         )
     }

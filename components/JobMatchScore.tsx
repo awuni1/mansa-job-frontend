@@ -62,36 +62,41 @@ export function JobMatchScore({
         setError(null)
 
         try {
-            const response = await fetch('/api/ai', {
+            // Get auth token
+            const token = localStorage.getItem('auth_token')
+            if (!token) {
+                setError('Please log in to see match score')
+                setLoading(false)
+                return
+            }
+
+            // Call new backend AI API
+            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'
+            const response = await fetch(`${API_URL}/ai/job-match/`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify({
-                    action: 'matchJob',
-                    data: {
-                        candidateProfile: {
-                            skills: candidateSkills,
-                            yearsExperience: candidateExperience,
-                            location: candidateLocation,
-                            desiredSalary
-                        },
-                        jobRequirements: {
-                            title: jobTitle,
-                            skills: jobSkills,
-                            experienceLevel,
-                            location: jobLocation,
-                            salaryRange
-                        }
+                    job_id: jobId,
+                    candidate_profile: {
+                        skills: candidateSkills,
+                        yearsExperience: candidateExperience,
+                        location: candidateLocation,
+                        desiredSalary
                     }
                 })
             })
 
-            const result = await response.json()
-            if (result.success) {
-                setMatchData(result.data)
-            } else {
-                setError(result.error)
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`)
             }
+
+            const result = await response.json()
+            setMatchData(result)
         } catch (err) {
+            console.error('Match calculation error:', err)
             setError('Failed to calculate match')
         } finally {
             setLoading(false)

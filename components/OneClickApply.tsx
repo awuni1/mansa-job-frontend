@@ -1,30 +1,37 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
     Zap, FileText, Upload, Check, Loader2,
-    ChevronDown, ChevronUp, Edit2, Send
+    ChevronDown, ChevronUp, Edit2, Send, AlertCircle
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { cn } from '@/lib/utils'
 
-interface SavedProfile {
-    resumeUrl: string
-    resumeName: string
-    coverLetterTemplate: string
-    name: string
-    email: string
-    phone: string
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+
+interface Resume {
+    id: number
+    file: string
+    file_name: string
+    is_primary: boolean
+    parsed_data?: {
+        name?: string
+        email?: string
+        phone?: string
+        skills?: string[]
+        experience?: any[]
+    }
+    uploaded_at: string
 }
 
 interface OneClickApplyProps {
     jobId: string | number
     jobTitle: string
     companyName: string
-    savedProfile?: SavedProfile
-    onApply: (jobId: string | number, coverLetter?: string) => Promise<void>
+    onApply: (jobId: string | number, coverLetter?: string, resumeId?: number) => Promise<void>
     className?: string
 }
 
@@ -32,7 +39,6 @@ export function OneClickApply({
     jobId,
     jobTitle,
     companyName,
-    savedProfile,
     onApply,
     className
 }: OneClickApplyProps) {
@@ -41,26 +47,89 @@ export function OneClickApply({
     const [isApplying, setIsApplying] = useState(false)
     const [isApplied, setIsApplied] = useState(false)
     const [showCustomize, setShowCustomize] = useState(false)
+    const [loading, setLoading] = useState(true)
+    const [resume, setResume] = useState<Resume | null>(null)
+    const [error, setError] = useState('')
 
-    // Generate default cover letter
+    useEffect(() => {
+        fetchPrimaryResume()
+    }, [])
+
+    const fetchPrimaryResume = async () => {
+        try {
+            const token = localStorage.getItem('token')
+            if (!token) {
+                setLoading(false)
+                return
+            }
+
+            const response = await fetch(`${API_URL}/api/auth/resumes/`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            })
+
+            if (response.ok) {
+                const data = await response.json()
+                const primaryResume = data.find((r: Resume) => r.is_primary) || data[0]
+                setResume(primaryResume)
+            }
+        } catch (err) {
+            console.error('Failed to fetch resume:', err)
+        } finally {
+            setLoading(false)
+        }
+    }
+
     const generateCoverLetter = () => {
-        if (!savedProfile) return ''
-        return savedProfile.coverLetterTemplate
-            .replace('{company}', companyName)
-            .replace('{position}', jobTitle)
-            .replace('{name}', savedProfile.name)
+        if (!resume?.parsed_data) return ''
+        
+        const name = resume.parsed_data.name || 'Applicant'
+        return `Dear Hiring Manager,
+
+I am writing to express my strong interest in the ${jobTitle} position at ${companyName}. With my background and skills, I am confident I would be a valuable addition to your team.
+
+${resume.parsed_data.skills && resume.parsed_data.skills.length > 0 
+    ? `My key skills include: ${resume.parsed_data.skills.slice(0, 5).join(', ')}.` 
+    : ''}
+
+I am excited about the opportunity to contribute to ${companyName} and would welcome the chance to discuss how my experience aligns with your needs.
+
+Thank you for considering my application.
+
+Best regards,
+${name}`
     }
 
     const handleQuickApply = async () => {
+        if (!resume) {
+            setError('No resume found. Please upload a resume first.')
+            return
+        }
+
         setIsApplying(true)
+        setError('')
         try {
-            await onApply(jobId, customCoverLetter || generateCoverLetter())
+            await onApply(
+                jobId, 
+                customCoverLetter || generateCoverLetter(),
+                resume.id
+            )
             setIsApplied(true)
-        } catch (error) {
+        } catch (error: any) {
             console.error('Application failed:', error)
+            setError(error.message || 'Failed to submit application')
         } finally {
             setIsApplying(false)
         }
+    }
+
+    if (loading) {
+        return (
+            <div className={cn("p-4 rounded-xl bg-muted border border-border flex items-center justify-center", className)}>
+                <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            </div>
+        )
     }
 
     if (isApplied) {
@@ -85,7 +154,7 @@ export function OneClickApply({
         )
     }
 
-    if (!savedProfile) {
+    if (!resume) {
         return (
             <div className={cn("p-4 rounded-xl bg-muted border border-border", className)}>
                 <div className="flex items-center gap-3 mb-3">
@@ -93,10 +162,10 @@ export function OneClickApply({
                     <p className="font-medium">Set up One-Click Apply</p>
                 </div>
                 <p className="text-sm text-muted-foreground mb-3">
-                    Upload your resume and create a cover letter template to apply instantly.
+                    Upload your resume to enable instant job applications.
                 </p>
-                <Button variant="outline" size="sm">
-                    Set Up Profile
+                <Button variant="outline" size="sm" asChild>
+                    <a href="/profile?tab=resumes">Upload Resume</a>
                 </Button>
             </div>
         )
@@ -105,6 +174,14 @@ export function OneClickApply({
     return (
         <div className={className}>
             <GlassCard className="!p-4">
+                {/* Error Alert */}
+                {error && (
+                    <div className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/30 flex items-start gap-2">
+                        <AlertCircle className="w-4 h-4 text-destructive mt-0.5" />
+                        <p className="text-sm text-destructive">{error}</p>
+                    </div>
+                )}
+
                 {/* Quick Apply Button */}
                 <div className="flex items-center gap-3 mb-4">
                     <motion.button
@@ -144,10 +221,10 @@ export function OneClickApply({
                     </button>
                 </div>
 
-                {/* Saved Profile Info */}
+                {/* Saved Resume Info */}
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <FileText className="w-4 h-4" />
-                    <span>Using: {savedProfile.resumeName}</span>
+                    <span>Using: {resume.file_name}</span>
                 </div>
 
                 {/* Expanded Options */}
@@ -161,16 +238,22 @@ export function OneClickApply({
                         >
                             <div className="pt-4 mt-4 border-t border-border">
                                 {/* Profile Summary */}
-                                <div className="grid grid-cols-2 gap-2 mb-4 text-sm">
-                                    <div className="p-2 rounded-lg bg-muted/50">
-                                        <p className="text-muted-foreground">Name</p>
-                                        <p className="font-medium">{savedProfile.name}</p>
+                                {resume.parsed_data && (
+                                    <div className="grid grid-cols-2 gap-2 mb-4 text-sm">
+                                        {resume.parsed_data.name && (
+                                            <div className="p-2 rounded-lg bg-muted/50">
+                                                <p className="text-muted-foreground">Name</p>
+                                                <p className="font-medium">{resume.parsed_data.name}</p>
+                                            </div>
+                                        )}
+                                        {resume.parsed_data.email && (
+                                            <div className="p-2 rounded-lg bg-muted/50">
+                                                <p className="text-muted-foreground">Email</p>
+                                                <p className="font-medium truncate">{resume.parsed_data.email}</p>
+                                            </div>
+                                        )}
                                     </div>
-                                    <div className="p-2 rounded-lg bg-muted/50">
-                                        <p className="text-muted-foreground">Email</p>
-                                        <p className="font-medium truncate">{savedProfile.email}</p>
-                                    </div>
-                                </div>
+                                )}
 
                                 {/* Customize Cover Letter */}
                                 <button

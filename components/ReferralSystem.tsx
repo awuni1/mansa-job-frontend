@@ -1,10 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import {
     Link2, Copy, Check, Users, DollarSign,
-    Clock, CheckCircle, XCircle, Plus, Send
+    Clock, CheckCircle, XCircle, Plus, Send, Loader2, Upload
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,112 +12,149 @@ import { GlassCard, GradientCard } from '@/components/ui/GlassCard'
 import { cn } from '@/lib/utils'
 
 interface Referral {
-    id: string
-    referrerName: string
-    referrerEmail: string
-    candidateName: string
-    candidateEmail: string
-    jobTitle: string
-    status: 'pending' | 'applied' | 'interviewing' | 'hired' | 'rejected'
-    createdAt: string
-    bonus?: number
-    bonusStatus?: 'pending' | 'paid'
+    id: number
+    company_name: string
+    candidate_name: string
+    candidate_email: string
+    candidate_phone: string
+    job_title: string
+    message: string
+    status: 'pending' | 'contacted' | 'interviewing' | 'hired' | 'rejected'
+    status_updated_at: string
+    reward_amount: string
+    reward_paid: boolean
+    created_at: string
 }
 
 interface ReferralSystemProps {
-    referrals: Referral[]
-    referralLink: string
-    bonusAmount: number
-    onCreateReferral?: (email: string, jobId: string) => void
+    companySlug?: string
     className?: string
 }
 
 const statusConfig = {
-    pending: { label: 'Awaiting Application', color: 'bg-muted text-muted-foreground', icon: Clock },
-    applied: { label: 'Applied', color: 'bg-blue-500/20 text-blue-600', icon: CheckCircle },
+    pending: { label: 'Pending Review', color: 'bg-muted text-muted-foreground', icon: Clock },
+    contacted: { label: 'Contacted', color: 'bg-blue-500/20 text-blue-600', icon: CheckCircle },
     interviewing: { label: 'Interviewing', color: 'bg-secondary/20 text-secondary', icon: Users },
     hired: { label: 'Hired!', color: 'bg-accent/20 text-accent', icon: CheckCircle },
     rejected: { label: 'Not Selected', color: 'bg-destructive/20 text-destructive', icon: XCircle },
 }
 
 export function ReferralSystem({
-    referrals,
-    referralLink,
-    bonusAmount,
-    onCreateReferral,
+    companySlug,
     className
 }: ReferralSystemProps) {
-    const [copied, setCopied] = useState(false)
+    const [referrals, setReferrals] = useState<Referral[]>([])
+    const [loading, setLoading] = useState(true)
     const [showForm, setShowForm] = useState(false)
-    const [email, setEmail] = useState('')
-    const [jobId, setJobId] = useState('')
+    const [submitting, setSubmitting] = useState(false)
+    
+    // Form state
+    const [formData, setFormData] = useState({
+        company: companySlug || '',
+        candidate_name: '',
+        candidate_email: '',
+        candidate_phone: '',
+        job_title: '',
+        message: ''
+    })
+    const [resumeFile, setResumeFile] = useState<File | null>(null)
 
-    const handleCopy = async () => {
-        await navigator.clipboard.writeText(referralLink)
-        setCopied(true)
-        setTimeout(() => setCopied(false), 2000)
+    useEffect(() => {
+        fetchReferrals()
+    }, [])
+
+    const fetchReferrals = async () => {
+        try {
+            const token = localStorage.getItem('auth_token')
+            if (!token) return
+
+            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'
+            const response = await fetch(`${API_URL}/companies/referrals/my/`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            })
+
+            if (response.ok) {
+                const data = await response.json()
+                setReferrals(data)
+            }
+        } catch (error) {
+            console.error('Failed to fetch referrals:', error)
+        } finally {
+            setLoading(false)
+        }
     }
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
-        if (email && jobId) {
-            onCreateReferral?.(email, jobId)
-            setEmail('')
-            setJobId('')
-            setShowForm(false)
+        
+        const token = localStorage.getItem('auth_token')
+        if (!token) {
+            alert('Please log in to submit referrals')
+            return
+        }
+
+        setSubmitting(true)
+
+        try {
+            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'
+            const formDataToSend = new FormData()
+            
+            Object.entries(formData).forEach(([key, value]) => {
+                formDataToSend.append(key, value)
+            })
+            
+            if (resumeFile) {
+                formDataToSend.append('candidate_resume', resumeFile)
+            }
+
+            const response = await fetch(`${API_URL}/companies/referrals/create/`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                },
+                body: formDataToSend
+            })
+
+            if (response.ok) {
+                alert('Referral submitted successfully!')
+                setFormData({
+                    company: companySlug || '',
+                    candidate_name: '',
+                    candidate_email: '',
+                    candidate_phone: '',
+                    job_title: '',
+                    message: ''
+                })
+                setResumeFile(null)
+                setShowForm(false)
+                fetchReferrals()
+            } else {
+                const error = await response.json()
+                alert(`Failed to submit: ${JSON.stringify(error)}`)
+            }
+        } catch (error) {
+            console.error('Referral submission error:', error)
+            alert('Failed to submit referral')
+        } finally {
+            setSubmitting(false)
         }
     }
 
     const stats = {
         total: referrals.length,
-        applied: referrals.filter(r => r.status !== 'pending').length,
+        pending: referrals.filter(r => r.status === 'pending').length,
         hired: referrals.filter(r => r.status === 'hired').length,
-        earned: referrals.filter(r => r.bonusStatus === 'paid').reduce((sum, r) => sum + (r.bonus || 0), 0),
-        pending: referrals.filter(r => r.status === 'hired' && r.bonusStatus === 'pending').reduce((sum, r) => sum + (r.bonus || 0), 0)
+        earned: referrals.filter(r => r.reward_paid).reduce((sum, r) => sum + parseFloat(r.reward_amount), 0),
+        pendingReward: referrals.filter(r => r.status === 'hired' && !r.reward_paid).reduce((sum, r) => sum + parseFloat(r.reward_amount), 0)
     }
 
-    return (
-        <div className={cn("space-y-6", className)}>
-            {/* Header Card */}
-            <GradientCard className="!p-6">
-                <div className="flex flex-col md:flex-row gap-6 items-start md:items-center justify-between">
-                    <div>
-                        <h2 className="text-xl font-bold mb-2">Refer & Earn</h2>
-                        <p className="text-muted-foreground">
-                            Earn <span className="text-accent font-bold">${bonusAmount}</span> for each successful hire from your referrals
-                        </p>
-                    </div>
-                    <Button onClick={() => setShowForm(!showForm)} className="gradient-african text-white">
-                        <Plus className="w-4 h-4 mr-2" />
-                        Refer Someone
-                    </Button>
-                </div>
-
-                {/* Referral Link */}
-                <div className="mt-6 p-4 rounded-xl bg-background/50">
-                    <p className="text-sm text-muted-foreground mb-2">Your unique referral link</p>
-                    <div className="flex gap-2">
-                        <Input
-                            value={referralLink}
-                            readOnly
-                            className="bg-background font-mono text-sm"
-                        />
-                        <Button onClick={handleCopy} variant="outline">
-                            {copied ? (
-                                <>
-                                    <Check className="w-4 h-4 text-accent" />
-                                </>
-                            ) : (
-                                <>
-                                    <Copy className="w-4 h-4" />
-                                </>
-                            )}
-                        </Button>
-                    </div>
-                </div>
-
-                {/* Quick Refer Form */}
-                {showForm && (
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center p-8">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            </div>
+        )
+    }
                     <motion.form
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: 'auto' }}

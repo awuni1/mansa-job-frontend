@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/button'
 import { GlassCard, GradientCard } from '@/components/ui/GlassCard'
 import { cn } from '@/lib/utils'
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+
 interface VideoProfileProps {
     existingVideoUrl?: string
     maxDuration?: number // in seconds
@@ -32,6 +34,7 @@ export function VideoProfile({
     const [recordingTime, setRecordingTime] = useState(0)
     const [error, setError] = useState<string | null>(null)
     const [uploading, setUploading] = useState(false)
+    const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null)
 
     const videoRef = useRef<HTMLVideoElement>(null)
     const streamRef = useRef<MediaStream | null>(null)
@@ -94,6 +97,7 @@ export function VideoProfile({
             const blob = new Blob(chunksRef.current, { type: 'video/webm' })
             const url = URL.createObjectURL(blob)
             setRecordedUrl(url)
+            setRecordedBlob(blob)
 
             if (streamRef.current) {
                 streamRef.current.getTracks().forEach(track => track.stop())
@@ -127,6 +131,7 @@ export function VideoProfile({
 
     const retake = () => {
         setRecordedUrl(null)
+        setRecordedBlob(null)
         setRecordingTime(0)
     }
 
@@ -142,24 +147,84 @@ export function VideoProfile({
     }
 
     const handleUpload = async () => {
-        if (!recordedUrl) return
+        if (!recordedBlob) return
 
         setUploading(true)
+        setError(null)
         try {
-            // In a real app, upload the video to storage
-            // For now, we'll simulate it
-            await new Promise(resolve => setTimeout(resolve, 2000))
-            onVideoUploaded?.(recordedUrl)
-        } catch (err) {
-            setError('Failed to upload video. Please try again.')
+            const token = localStorage.getItem('token')
+            if (!token) {
+                setError('Please log in to upload video')
+                setUploading(false)
+                return
+            }
+
+            const formData = new FormData()
+            const videoFile = new File([recordedBlob], `video_intro_${Date.now()}.webm`, {
+                type: 'video/webm'
+            })
+            formData.append('video_introduction', videoFile)
+
+            const response = await fetch(`${API_URL}/api/auth/profile/`, {
+                method: 'PATCH',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                },
+                body: formData
+            })
+
+            if (response.ok) {
+                const data = await response.json()
+                onVideoUploaded?.(data.video_introduction)
+                setError(null)
+            } else {
+                const errorData = await response.json()
+                setError(errorData.detail || 'Failed to upload video')
+            }
+        } catch (err: any) {
+            console.error('Upload error:', err)
+            setError(err.message || 'Failed to upload video. Please try again.')
         } finally {
             setUploading(false)
         }
     }
 
-    const handleDelete = () => {
-        setRecordedUrl(null)
-        onVideoDeleted?.()
+    const handleDelete = async () => {
+        setUploading(true)
+        setError(null)
+        try {
+            const token = localStorage.getItem('token')
+            if (!token) {
+                setError('Please log in to delete video')
+                setUploading(false)
+                return
+            }
+
+            const response = await fetch(`${API_URL}/api/auth/profile/`, {
+                method: 'PATCH',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    video_introduction: null
+                })
+            })
+
+            if (response.ok) {
+                setRecordedUrl(null)
+                setRecordedBlob(null)
+                onVideoDeleted?.()
+            } else {
+                const errorData = await response.json()
+                setError(errorData.detail || 'Failed to delete video')
+            }
+        } catch (err: any) {
+            console.error('Delete error:', err)
+            setError(err.message || 'Failed to delete video')
+        } finally {
+            setUploading(false)
+        }
     }
 
     const formatTime = (seconds: number) => {
@@ -318,6 +383,7 @@ export function VideoProfile({
                             onClick={handleDelete}
                             variant="outline"
                             className="text-destructive"
+                            disabled={uploading}
                         >
                             <Trash2 className="w-4 h-4 mr-2" />
                             Delete

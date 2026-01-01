@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 const navLinks = [
     { href: '/jobs', label: 'Find Jobs', icon: Briefcase },
     { href: '/companies', label: 'Companies', icon: Building2 },
+    { href: '/recommendations', label: 'Recommendations', icon: Briefcase },
     { href: '/salaries', label: 'Salaries', icon: DollarSign },
 ];
 

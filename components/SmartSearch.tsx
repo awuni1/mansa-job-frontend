@@ -73,22 +73,46 @@ export function SmartSearch({ onSearch, placeholder = "Try: 'Remote React jobs i
         setIsProcessing(true)
 
         try {
-            const response = await fetch('/api/ai', {
+            // Get auth token
+            const token = localStorage.getItem('auth_token')
+            if (!token) {
+                // If not logged in, do basic search without AI parsing
+                onSearch(searchQuery, {
+                    keywords: searchQuery.split(' '),
+                    location: null,
+                    jobType: null,
+                    experienceLevel: null,
+                    salaryMin: null,
+                    salaryMax: null,
+                    skills: []
+                })
+                setIsProcessing(false)
+                return
+            }
+
+            // Call new backend AI API
+            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'
+            const response = await fetch(`${API_URL}/ai/parse-search/`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify({
-                    action: 'parseSearch',
-                    data: { query: searchQuery }
+                    query: searchQuery
                 })
             })
 
-            const result = await response.json()
-            if (result.success) {
-                setParsedFilters(result.data)
-                setShowFilters(true)
-                onSearch(searchQuery, result.data)
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`)
             }
+
+            const result = await response.json()
+            setParsedFilters(result)
+            setShowFilters(true)
+            onSearch(searchQuery, result)
         } catch (error) {
+            console.error('Search parsing error:', error)
             // Fallback to basic search
             onSearch(searchQuery, {
                 keywords: searchQuery.split(' '),
@@ -98,6 +122,11 @@ export function SmartSearch({ onSearch, placeholder = "Try: 'Remote React jobs i
                 salaryMin: null,
                 salaryMax: null,
                 skills: []
+            })
+        } finally {
+            setIsProcessing(false)
+        }
+    }
             })
         } finally {
             setIsProcessing(false)

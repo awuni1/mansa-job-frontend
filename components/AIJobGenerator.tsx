@@ -42,32 +42,41 @@ export function AIJobGenerator({ onGenerated, className }: AIJobGeneratorProps) 
         setError(null)
 
         try {
-            const response = await fetch('/api/ai', {
+            // Get auth token
+            const token = localStorage.getItem('auth_token')
+            if (!token) {
+                setError('Please log in to use AI features')
+                setGenerating(false)
+                return
+            }
+
+            // Call new backend AI API
+            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'
+            const response = await fetch(`${API_URL}/ai/generate-job-description/`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify({
-                    action: 'generateJobDescription',
-                    data: {
-                        jobInfo: {
-                            title,
-                            company,
-                            location,
-                            type,
-                            requirements: requirements.split(',').map(r => r.trim()).filter(Boolean)
-                        }
-                    }
+                    title,
+                    company,
+                    location,
+                    type,
+                    requirements: requirements.split(',').map(r => r.trim()).filter(Boolean)
                 })
             })
 
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`)
+            }
+
             const result = await response.json()
 
-            if (result.success) {
-                setGeneratedData(result.data)
-                onGenerated?.(result.data)
-            } else {
-                setError(result.error || 'Failed to generate description')
-            }
+            setGeneratedData(result)
+            onGenerated?.(result)
         } catch (err) {
+            console.error('Job description generation error:', err)
             setError('Failed to generate description. Please try again.')
         } finally {
             setGenerating(false)
