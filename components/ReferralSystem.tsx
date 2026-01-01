@@ -49,16 +49,13 @@ export function ReferralSystem({
     const [submitting, setSubmitting] = useState(false)
     
     // Form state
-    const [formData, setFormData] = useState({
-        company: companySlug || '',
-        candidate_name: '',
-        candidate_email: '',
-        candidate_phone: '',
-        job_title: '',
-        message: ''
-    })
+    const [candidateName, setCandidateName] = useState('')
+    const [email, setEmail] = useState('')
+    const [phone, setPhone] = useState('')
+    const [jobId, setJobId] = useState('')
     const [resumeFile, setResumeFile] = useState<File | null>(null)
-
+    const [message, setMessage] = useState('')
+    
     useEffect(() => {
         fetchReferrals()
     }, [])
@@ -99,9 +96,12 @@ export function ReferralSystem({
             const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'
             const formDataToSend = new FormData()
             
-            Object.entries(formData).forEach(([key, value]) => {
-                formDataToSend.append(key, value)
-            })
+            formDataToSend.append('company', companySlug || '')
+            formDataToSend.append('candidate_name', candidateName)
+            formDataToSend.append('candidate_email', email)
+            formDataToSend.append('candidate_phone', phone)
+            formDataToSend.append('job_title', jobId)
+            formDataToSend.append('message', message)
             
             if (resumeFile) {
                 formDataToSend.append('candidate_resume', resumeFile)
@@ -117,14 +117,11 @@ export function ReferralSystem({
 
             if (response.ok) {
                 alert('Referral submitted successfully!')
-                setFormData({
-                    company: companySlug || '',
-                    candidate_name: '',
-                    candidate_email: '',
-                    candidate_phone: '',
-                    job_title: '',
-                    message: ''
-                })
+                setCandidateName('')
+                setEmail('')
+                setPhone('')
+                setJobId('')
+                setMessage('')
                 setResumeFile(null)
                 setShowForm(false)
                 fetchReferrals()
@@ -143,6 +140,7 @@ export function ReferralSystem({
     const stats = {
         total: referrals.length,
         pending: referrals.filter(r => r.status === 'pending').length,
+        applied: referrals.filter(r => r.status === 'contacted' || r.status === 'interviewing').length,
         hired: referrals.filter(r => r.status === 'hired').length,
         earned: referrals.filter(r => r.reward_paid).reduce((sum, r) => sum + parseFloat(r.reward_amount), 0),
         pendingReward: referrals.filter(r => r.status === 'hired' && !r.reward_paid).reduce((sum, r) => sum + parseFloat(r.reward_amount), 0)
@@ -155,6 +153,25 @@ export function ReferralSystem({
             </div>
         )
     }
+
+    return (
+        <div className={cn("space-y-6", className)}>
+            {/* Refer Someone Card */}
+            <GradientCard className="!p-6">
+                <div className="flex items-center justify-between mb-4">
+                    <div>
+                        <h3 className="text-xl font-bold mb-1">Refer a Candidate</h3>
+                        <p className="text-sm text-muted-foreground">
+                            Earn rewards by referring talented candidates
+                        </p>
+                    </div>
+                    <Button onClick={() => setShowForm(!showForm)}>
+                        <Plus className="w-4 h-4 mr-2" />
+                        New Referral
+                    </Button>
+                </div>
+
+                {showForm && (
                     <motion.form
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: 'auto' }}
@@ -240,15 +257,15 @@ export function ReferralSystem({
                                     {/* Avatar */}
                                     <div className="w-10 h-10 rounded-full gradient-african flex items-center justify-center flex-shrink-0">
                                         <span className="text-white font-bold">
-                                            {referral.candidateName.charAt(0)}
+                                            {referral.candidate_name.charAt(0)}
                                         </span>
                                     </div>
 
                                     {/* Info */}
                                     <div className="flex-1 min-w-0">
-                                        <p className="font-medium">{referral.candidateName}</p>
+                                        <p className="font-medium">{referral.candidate_name}</p>
                                         <p className="text-sm text-muted-foreground truncate">
-                                            {referral.jobTitle}
+                                            {referral.job_title}
                                         </p>
                                     </div>
 
@@ -261,12 +278,12 @@ export function ReferralSystem({
                                             <StatusIcon className="w-3 h-3" />
                                             {statusConfig[referral.status].label}
                                         </span>
-                                        {referral.status === 'hired' && referral.bonus && (
+                                        {referral.status === 'hired' && referral.reward_amount && (
                                             <p className={cn(
                                                 "text-sm font-medium mt-1",
-                                                referral.bonusStatus === 'paid' ? "text-accent" : "text-secondary"
+                                                referral.reward_paid ? "text-accent" : "text-secondary"
                                             )}>
-                                                ${referral.bonus} {referral.bonusStatus === 'paid' ? 'earned' : 'pending'}
+                                                ${referral.reward_amount} {referral.reward_paid ? 'earned' : 'pending'}
                                             </p>
                                         )}
                                     </div>

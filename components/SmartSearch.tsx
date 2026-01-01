@@ -127,11 +127,6 @@ export function SmartSearch({ onSearch, placeholder = "Try: 'Remote React jobs i
             setIsProcessing(false)
         }
     }
-            })
-        } finally {
-            setIsProcessing(false)
-        }
-    }
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault()

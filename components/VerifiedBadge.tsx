@@ -72,12 +72,23 @@ export function VerifiedBadge({
 
 // Tooltip version for compact displays
 export function VerifiedBadgeIcon({
-    type,
+    isVerified,
+    type = 'company',
     size = 'md',
     className
 }: Omit<VerifiedBadgeProps, 'showLabel'>) {
-    const config = badgeConfig[type]
     const sizeStyles = sizeConfig[size]
+    
+    const config = isVerified ? {
+        icon: CheckCircle,
+        label: type === 'company' ? 'Verified Company' : 'Verified Profile',
+        color: 'text-blue-500'
+    } : {
+        icon: AlertCircle,
+        label: 'Verification Pending',
+        color: 'text-yellow-500'
+    }
+    
     const Icon = config.icon
 
     return (
@@ -85,7 +96,7 @@ export function VerifiedBadgeIcon({
             className={cn(config.color, className)}
             title={config.label}
         >
-            <Icon className={cn(sizeStyles.icon, type === 'top_rated' && 'fill-current')} />
+            <Icon className={sizeStyles.icon} />
         </span>
     )
 }

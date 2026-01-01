@@ -32,6 +32,7 @@ interface Review {
 
 interface CompanyReviewsProps {
     companySlug: string
+    companyName?: string
     className?: string
 }
 
@@ -53,6 +54,7 @@ const categoryIcons = {
 
 export function CompanyReviews({
     companySlug,
+    companyName = 'Company',
     className
 }: CompanyReviewsProps) {
     const [reviews, setReviews] = useState<Review[]>([])
@@ -160,6 +162,35 @@ export function CompanyReviews({
             return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         })
 
+    // Calculate statistics
+    const totalReviews = reviews.length
+    const averageRating = reviews.length > 0
+        ? reviews.reduce((sum, r) => sum + r.overall_rating, 0) / reviews.length
+        : 0
+
+    const categoryAverages = {
+        work_life_balance: reviews.length > 0
+            ? reviews.reduce((sum, r) => sum + (r.work_life_balance || 0), 0) / reviews.length
+            : 0,
+        salary_benefits: reviews.length > 0
+            ? reviews.reduce((sum, r) => sum + (r.salary_benefits || 0), 0) / reviews.length
+            : 0,
+        job_security: reviews.length > 0
+            ? reviews.reduce((sum, r) => sum + (r.job_security || 0), 0) / reviews.length
+            : 0,
+        management: reviews.length > 0
+            ? reviews.reduce((sum, r) => sum + (r.management || 0), 0) / reviews.length
+            : 0,
+        culture: reviews.length > 0
+            ? reviews.reduce((sum, r) => sum + (r.culture || 0), 0) / reviews.length
+            : 0
+    }
+
+    // Calculate recommendation percentage (assuming ratings >= 4 mean they would recommend)
+    const recommendPercentage = reviews.length > 0
+        ? Math.round((reviews.filter(r => r.overall_rating >= 4).length / reviews.length) * 100)
+        : 0
+
     return (
         <div className={cn("space-y-6", className)}>
             {/* Overview Card */}
@@ -248,9 +279,33 @@ export function CompanyReviews({
                 >
                     <ReviewForm
                         companyName={companyName}
-                        onSubmit={(review) => {
-                            onSubmitReview?.(review)
-                            setShowForm(false)
+                        onSubmit={async (review) => {
+                            // Submit to API
+                            const token = localStorage.getItem('auth_token')
+                            if (!token) {
+                                alert('Please log in to submit a review')
+                                return
+                            }
+                            try {
+                                const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'
+                                const response = await fetch(`${API_URL}/companies/${companySlug}/reviews/`, {
+                                    method: 'POST',
+                                    headers: {
+                                        'Authorization': `Bearer ${token}`,
+                                        'Content-Type': 'application/json'
+                                    },
+                                    body: JSON.stringify(review)
+                                })
+                                if (response.ok) {
+                                    fetchReviews() // Refresh reviews
+                                    setShowForm(false)
+                                } else {
+                                    alert('Failed to submit review')
+                                }
+                            } catch (error) {
+                                console.error('Failed to submit review:', error)
+                                alert('Failed to submit review')
+                            }
                         }}
                         onCancel={() => setShowForm(false)}
                     />
@@ -269,16 +324,11 @@ export function CompanyReviews({
                             <div className="flex items-start justify-between mb-4">
                                 <div>
                                     <div className="flex items-center gap-2 mb-1">
-                                        {renderStars(review.rating)}
+                                        {renderStars(review.overall_rating)}
                                         <span className="font-bold">{review.title}</span>
                                     </div>
                                     <p className="text-sm text-muted-foreground">
-                                        {review.role} · {review.employmentStatus} · {formatDate(review.createdAt)}
-                                        {review.isCurrentEmployee && (
-                                            <span className="ml-2 px-2 py-0.5 rounded-full bg-accent/10 text-accent text-xs">
-                                                Current Employee
-                                            </span>
-                                        )}
+                                        {review.job_title} · {review.employment_status} · {formatDate(review.created_at)}
                                     </p>
                                 </div>
                             </div>
@@ -297,18 +347,14 @@ export function CompanyReviews({
                             <div className="flex items-center gap-4 pt-4 border-t border-border/50">
                                 <p className="text-sm text-muted-foreground">Was this review helpful?</p>
                                 <button
-                                    onClick={() => onHelpful?.(review.id, true)}
-                                    className="flex items-center gap-1 px-3 py-1 rounded-lg hover:bg-muted transition text-sm"
+                                    onClick={() => handleMarkHelpful(review.id)}
+                                    className={cn(
+                                        "flex items-center gap-1 px-3 py-1 rounded-lg hover:bg-muted transition text-sm",
+                                        review.is_helpful && "bg-primary/10 text-primary"
+                                    )}
                                 >
                                     <ThumbsUp className="w-4 h-4" />
-                                    {review.helpful}
-                                </button>
-                                <button
-                                    onClick={() => onHelpful?.(review.id, false)}
-                                    className="flex items-center gap-1 px-3 py-1 rounded-lg hover:bg-muted transition text-sm"
-                                >
-                                    <ThumbsDown className="w-4 h-4" />
-                                    {review.notHelpful}
+                                    {review.helpful_count}
                                 </button>
                             </div>
                         </GlassCard>
@@ -336,16 +382,16 @@ function ReviewForm({
     onSubmit: (review: Partial<Review>) => void
     onCancel: () => void
 }) {
-    const [rating, setRating] = useState(0)
+    const [overall_rating, setOverallRating] = useState(0)
     const [title, setTitle] = useState('')
     const [pros, setPros] = useState('')
     const [cons, setCons] = useState('')
-    const [role, setRole] = useState('')
-    const [isCurrentEmployee, setIsCurrentEmployee] = useState(true)
+    const [job_title, setJobTitle] = useState('')
+    const [employment_status, setEmploymentStatus] = useState('current')
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault()
-        onSubmit({ rating, title, pros, cons, role, isCurrentEmployee })
+        onSubmit({ overall_rating, title, pros, cons, job_title, employment_status })
     }
 
     return (
@@ -359,12 +405,12 @@ function ReviewForm({
                             <button
                                 key={star}
                                 type="button"
-                                onClick={() => setRating(star)}
+                                onClick={() => setOverallRating(star)}
                                 className="hover:scale-110 transition-transform"
                             >
                                 <Star className={cn(
                                     "w-8 h-8",
-                                    star <= rating
+                                    star <= overall_rating
                                         ? "fill-secondary text-secondary"
                                         : "text-muted-foreground/30"
                                 )} />
@@ -389,8 +435,8 @@ function ReviewForm({
                     <label className="text-sm font-medium mb-1.5 block">Your Job Title *</label>
                     <input
                         type="text"
-                        value={role}
-                        onChange={(e) => setRole(e.target.value)}
+                        value={job_title}
+                        onChange={(e) => setJobTitle(e.target.value)}
                         placeholder="e.g. Software Engineer"
                         className="w-full p-3 rounded-lg border border-input bg-background"
                         required
@@ -420,17 +466,19 @@ function ReviewForm({
                     </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                    <input
-                        type="checkbox"
-                        id="currentEmployee"
-                        checked={isCurrentEmployee}
-                        onChange={(e) => setIsCurrentEmployee(e.target.checked)}
-                        className="rounded"
-                    />
-                    <label htmlFor="currentEmployee" className="text-sm">
-                        I currently work at {companyName}
-                    </label>
+                <div>
+                    <label className="text-sm font-medium mb-1.5 block">Employment Status *</label>
+                    <select
+                        value={employment_status}
+                        onChange={(e) => setEmploymentStatus(e.target.value)}
+                        className="w-full p-3 rounded-lg border border-input bg-background"
+                        required
+                    >
+                        <option value="current">Current Employee</option>
+                        <option value="former">Former Employee</option>
+                        <option value="freelance">Freelance/Contract</option>
+                        <option value="intern">Intern</option>
+                    </select>
                 </div>
 
                 <div className="flex gap-3 pt-4">
